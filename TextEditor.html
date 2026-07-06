@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+        }
+        
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            transition: background-color 0.3s;
+            padding-top: 30px;
+            min-height: 100vh;
+        }
+        
+        body.dark {
+            background-color: #303030;
+        }
+        
+        body.light {
+            background-color: #2c2c2c;
+        }
+        
+        .menubar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            display: flex;
+            font-size: 11px;
+            z-index: 100;
+            background-color: #555555;
+            color: #e8e8e8;
+        }
+        
+        .menu {
+            position: relative;
+        }
+        
+        .menu-title {
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+        
+        .menu-title:hover {
+            opacity: 0.7;
+        }
+        
+        .menu-items {
+            display: none;
+            position: absolute;
+            top: 30px;
+            left: 0;
+            min-width: 170px;
+            z-index: 1000;
+            background-color: #555555;
+            color: #e8e8e8;
+        }
+        
+        .menu-items.show {
+            display: block;
+        }
+        
+        .menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        
+        .menu-item:hover {
+            opacity: 0.7;
+        }
+        
+        .menu-item.disabled {
+            opacity: 0.35;
+            cursor: default;
+            pointer-events: none;
+        }
+        
+        .menu-item-check {
+            opacity: 0.6;
+            font-size: 10px;
+        }
+        
+        .app-body {
+            display: flex;
+            align-items: stretch;
+            min-height: calc(100vh - 30px);
+        }
+        
+        /* ---- Sidebar (chapters panel) ---- */
+        
+        .sidebar {
+            width: 240px;
+            flex-shrink: 0;
+            overflow-y: auto;
+            font-size: 11px;
+            transition: width 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+            box-sizing: border-box;
+        }
+        
+        .sidebar.hidden {
+            width: 0;
+            padding: 0 !important;
+            opacity: 0;
+            overflow: hidden;
+        }
+        
+        .dark .sidebar {
+            background-color: #262626;
+        }
+        
+        .light .sidebar {
+            background-color: #2f2f2f;
+        }
+        
+        .chapters-header {
+            padding: 12px 14px 8px;
+            font-weight: bold;
+            opacity: 0.7;
+            letter-spacing: 0.5px;
+        }
+        
+        .dark .chapters-header {
+            color: #cfcfcf;
+        }
+        
+        .light .chapters-header {
+            color: #e8e8e8;
+        }
+        
+        .chapter-list {
+            padding: 0 10px 10px;
+        }
+        
+        .chapter-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 6px 8px 6px 24px;
+            margin-bottom: 4px;
+            border-radius: 3px;
+            cursor: pointer;
+            min-height: 1.5em;
+        }
+        
+        .dark .chapter-item {
+            background-color: #3a3a3a;
+            color: #e8e8e8;
+        }
+        
+        .light .chapter-item {
+            background-color: #4a4a4a;
+            color: #e8e8e8;
+        }
+        
+        .chapter-item:hover {
+            opacity: 0.85;
+        }
+        
+        .chapter-item.dragging {
+            opacity: 0.4;
+        }
+        
+        .chapter-item.drag-over-top {
+            box-shadow: inset 0 2px 0 0 #4a9eff;
+        }
+        
+        .chapter-item.drag-over-bottom {
+            box-shadow: inset 0 -2px 0 0 #4a9eff;
+        }
+        
+        .chapter-empty-label {
+            font-style: italic;
+            opacity: 0.6;
+        }
+        
+        .chapter-drag-handle {
+            position: absolute;
+            left: 6px;
+            top: 0;
+            width: 16px;
+            height: 100%;
+            cursor: move;
+            opacity: 0.4;
+            user-select: none;
+            display: flex;
+            align-items: center;
+        }
+        
+        .chapter-drag-handle:hover {
+            opacity: 0.8;
+        }
+        
+        .chapter-drag-handle::before {
+            content: '⋮⋮';
+            font-size: 10px;
+        }
+        
+        .chapter-index {
+            opacity: 0.5;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        
+        .chapter-label {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        /* ---- Main content ---- */
+        
+        .main-content {
+            flex: 1;
+            min-width: 0;
+            padding: 65px;
+        }
+        
+        .editor-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 10px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        .dark .editor-container {
+            background-color: #555555;
+        }
+        
+        .light .editor-container {
+            background-color: #d7d7d5;
+        }
+        
+        .editor-content {
+            display: block;
+            width: 100%;
+            min-height: 500px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            outline: none;
+            border: none;
+            background: transparent;
+            resize: vertical;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .dark .editor-content {
+            color: #e8e8e8;
+        }
+        
+        .light .editor-content {
+            color: #000000;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body class="dark">
+    <div class="menubar">
+        <div class="menu">
+            <div class="menu-title" onclick="toggleMenu('fileMenu')">File</div>
+            <div class="menu-items" id="fileMenu">
+                <div class="menu-item" onclick="openFile(); closeMenus()">Open</div>
+                <div class="menu-item" onclick="saveFile(); closeMenus()">Save as</div>
+            </div>
+        </div>
+        <div class="menu">
+            <div class="menu-title" onclick="toggleMenu('editMenu')">Edit</div>
+            <div class="menu-items" id="editMenu">
+                <div class="menu-item" id="undoItem" onclick="undo(); closeMenus()">Undo</div>
+                <div class="menu-item" id="redoItem" onclick="redo(); closeMenus()">Redo</div>
+            </div>
+        </div>
+        <div class="menu">
+            <div class="menu-title" onclick="toggleMenu('viewMenu')">View</div>
+            <div class="menu-items" id="viewMenu">
+                <div class="menu-item" onclick="toggleTheme(); closeMenus()">Toggle Theme</div>
+                <div class="menu-item" onclick="toggleSidebar(); closeMenus()">
+                    <span>Chapters Sidebar</span>
+                    <span class="menu-item-check" id="sidebarCheck">✓</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="app-body">
+        <div class="sidebar" id="sidebar">
+            <div class="chapters-header">Chapters (drag to reorder)</div>
+            <div class="chapter-list" id="chapterList"></div>
+        </div>
+        
+        <div class="main-content">
+            <div class="editor-container">
+                <textarea id="editor" class="editor-content" spellcheck="false"></textarea>
+            </div>
+        </div>
+    </div>
+    
+    <input type="file" id="fileInput" accept=".txt">
+    
+    <script>
+        const editor = document.getElementById('editor');
+        const chapterList = document.getElementById('chapterList');
+        const fileInput = document.getElementById('fileInput');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarCheck = document.getElementById('sidebarCheck');
+        const undoItem = document.getElementById('undoItem');
+        const redoItem = document.getElementById('redoItem');
+        let history = [''];
+        let historyIndex = 0;
+        let isUndoRedo = false;
+        let draggedItem = null;
+        let renderScheduled = false;
+        let sidebarVisible = true;
+
+        // ---- Virtual chapter model -------------------------------------
+        // The raw text in the textarea is never touched by this logic.
+        // Chapters are computed on demand and only ever written back as a
+        // single, whole replacement of editor.value when the user actually
+        // reorders them.
+        //
+        // Rule: a line break has no structural meaning by itself. A blank
+        // line (double line break) separates paragraphs. Two consecutive
+        // blank lines (triple line break) mark the start of a new chapter.
+
+        function parseChapters(text) {
+            const lines = text.split('\n');
+            const chapters = [];
+            let current = [];
+            let currentStartLine = 0;
+            let emptyStreak = 0;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                current.push(line);
+                emptyStreak = (line === '') ? emptyStreak + 1 : 0;
+
+                if (emptyStreak === 2) {
+                    // The last two lines just pushed are the blank-line
+                    // separator itself; it belongs between chapters (added
+                    // back by reconstructText), not inside either chapter's
+                    // text. Excluding it here is what makes reordering safe.
+                    current.length -= 2;
+                    chapters.push({ lines: current, startLine: currentStartLine });
+                    current = [];
+                    currentStartLine = i + 1;
+                    emptyStreak = 0;
+                }
+            }
+            chapters.push({ lines: current, startLine: currentStartLine });
+
+            // Compute char offsets for click-to-select, without touching the text.
+            let pos = 0;
+            const lineOffsets = lines.map(l => {
+                const start = pos;
+                pos += l.length + 1;
+                return start;
+            });
+
+            chapters.forEach(ch => {
+                const text = ch.lines.join('\n');
+                ch.text = text;
+                ch.startOffset = lineOffsets[ch.startLine] !== undefined ? lineOffsets[ch.startLine] : 0;
+                ch.endOffset = ch.startOffset + text.length;
+            });
+
+            return chapters;
+        }
+
+        function chapterLabel(chapter) {
+            const firstContentLine = chapter.lines.find(l => l.trim() !== '');
+            if (!firstContentLine) return null;
+            const trimmed = firstContentLine.trim();
+            return trimmed.length > 60 ? trimmed.slice(0, 60) + '…' : trimmed;
+        }
+
+        function reconstructText(chapters) {
+            // Chapters no longer carry their trailing separator in .text
+            // (see parseChapters), so the separator is reinstated here as
+            // the join glue. This is what makes reordering deterministic:
+            // whichever chapter ends up where, it gets exactly one
+            // three-newline separator on each side it touches.
+            return chapters.map(ch => ch.text).join('\n\n\n');
+        }
+
+        // ---- Rendering the chapter list (fully decoupled from the textarea) ----
+
+        function scheduleRenderChapters() {
+            if (renderScheduled) return;
+            renderScheduled = true;
+            requestAnimationFrame(() => {
+                renderScheduled = false;
+                renderChapters();
+            });
+        }
+
+        function renderChapters() {
+            const chapters = parseChapters(editor.value);
+            chapterList.innerHTML = '';
+
+            chapters.forEach((chapter, idx) => {
+                const item = document.createElement('div');
+                item.className = 'chapter-item';
+                item.draggable = false;
+                item._chapter = chapter;
+
+                const handle = document.createElement('span');
+                handle.className = 'chapter-drag-handle';
+                handle.draggable = true;
+                item.appendChild(handle);
+
+                const index = document.createElement('span');
+                index.className = 'chapter-index';
+                index.textContent = (idx + 1) + '.';
+                item.appendChild(index);
+
+                const label = document.createElement('span');
+                const text = chapterLabel(chapter);
+                if (text) {
+                    label.className = 'chapter-label';
+                    label.textContent = text;
+                } else {
+                    label.className = 'chapter-label chapter-empty-label';
+                    label.textContent = '(empty chapter)';
+                }
+                item.appendChild(label);
+
+                item.addEventListener('click', (e) => {
+                    if (e.target === handle) return;
+                    editor.focus();
+                    editor.setSelectionRange(chapter.startOffset, chapter.endOffset);
+                });
+
+                setupChapterDragEvents(item, handle);
+                chapterList.appendChild(item);
+            });
+        }
+
+        // ---- Drag-and-drop reordering of chapters -----------------------
+        // This only ever rearranges DOM list items for visual feedback.
+        // The actual text is rebuilt once, on drop, from the resulting
+        // DOM order of chapter items.
+
+        function setupChapterDragEvents(item, handle) {
+            handle.addEventListener('dragstart', (e) => {
+                draggedItem = item;
+                item.classList.add('dragging');
+                e.stopPropagation();
+            });
+
+            handle.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+                    el.classList.remove('drag-over-top', 'drag-over-bottom');
+                });
+            });
+
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (!draggedItem || item === draggedItem) return;
+
+                const rect = item.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+
+                item.classList.remove('drag-over-top', 'drag-over-bottom');
+                if (e.clientY < midpoint) {
+                    item.classList.add('drag-over-top');
+                    item.parentNode.insertBefore(draggedItem, item);
+                } else {
+                    item.classList.add('drag-over-bottom');
+                    item.parentNode.insertBefore(draggedItem, item.nextSibling);
+                }
+            });
+
+            item.addEventListener('dragleave', (e) => {
+                if (e.target === item) {
+                    item.classList.remove('drag-over-top', 'drag-over-bottom');
+                }
+            });
+
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                commitChapterOrder();
+            });
+        }
+
+        function commitChapterOrder() {
+            const orderedChapters = Array.from(chapterList.children).map(el => el._chapter);
+            const newText = reconstructText(orderedChapters);
+            if (newText === editor.value) return;
+
+            editor.value = newText;
+            updateHistory();
+            renderChapters();
+        }
+
+        // ---- Plain-text editing: the textarea is left completely alone ----
+        // No keydown interception, no DOM splitting. Native typing,
+        // selection, IME, and native drag-to-move-selected-text all work
+        // exactly as the browser implements them.
+
+        editor.addEventListener('input', () => {
+            updateHistory();
+            scheduleRenderChapters();
+        });
+
+        function setTextContent(text) {
+            editor.value = text;
+            scheduleRenderChapters();
+        }
+
+        function getTextContent() {
+            return editor.value;
+        }
+
+        function updateHistory() {
+            if (isUndoRedo) {
+                isUndoRedo = false;
+                updateHistoryButtons();
+                return;
+            }
+
+            const text = editor.value;
+            history = history.slice(0, historyIndex + 1);
+            history.push(text);
+            historyIndex++;
+
+            if (history.length > 1000) {
+                history.shift();
+                historyIndex--;
+            }
+
+            updateHistoryButtons();
+        }
+
+        function canUndo() {
+            return historyIndex > 0;
+        }
+
+        function canRedo() {
+            return historyIndex < history.length - 1;
+        }
+
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                isUndoRedo = true;
+                editor.value = history[historyIndex];
+                scheduleRenderChapters();
+                updateHistoryButtons();
+            }
+        }
+
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                isUndoRedo = true;
+                editor.value = history[historyIndex];
+                scheduleRenderChapters();
+                updateHistoryButtons();
+            }
+        }
+
+        function updateHistoryButtons() {
+            undoItem.classList.toggle('disabled', historyIndex <= 0);
+            redoItem.classList.toggle('disabled', historyIndex >= history.length - 1);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    undo();
+                } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+                    e.preventDefault();
+                    redo();
+                }
+            }
+        });
+
+        function openFile() {
+            fileInput.click();
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    setTextContent(e.target.result);
+                    history = [e.target.result];
+                    historyIndex = 0;
+                    updateHistoryButtons();
+                };
+                reader.readAsText(file);
+            }
+            fileInput.value = '';
+        });
+
+        function saveFile() {
+            const text = getTextContent();
+            const blob = new Blob([text], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'document.txt';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            document.body.classList.toggle('light');
+        }
+
+        function toggleSidebar() {
+            sidebarVisible = !sidebarVisible;
+            sidebar.classList.toggle('hidden', !sidebarVisible);
+            sidebarCheck.style.visibility = sidebarVisible ? 'visible' : 'hidden';
+        }
+
+        function toggleMenu(menuId) {
+            closeMenus();
+            document.getElementById(menuId).classList.toggle('show');
+        }
+
+        function closeMenus() {
+            document.querySelectorAll('.menu-items').forEach(menu => {
+                menu.classList.remove('show');
+            });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.menu')) {
+                closeMenus();
+            }
+        });
+
+        setTextContent('');
+        updateHistoryButtons();
+    </script>
+</body>
+</html>
