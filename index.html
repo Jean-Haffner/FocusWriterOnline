@@ -513,7 +513,7 @@
         }
     </style>
 </head>
-<body class="dark">
+<body class="light">
     <div class="menubar">
         <div class="menu">
             <div class="menu-title" tabindex="0" role="button" aria-haspopup="true" onclick="toggleMenu('fileMenu')">File</div>
@@ -544,7 +544,7 @@
                 <div class="menu-separator" role="separator"></div>
                 <div class="menu-item" tabindex="0" role="menuitemcheckbox" onclick="toggleSidebar(); closeMenus()">
                     <span>Chapters Tool</span>
-                    <span class="menu-item-check" id="sidebarCheck">✓</span>
+                    <span class="menu-item-check" id="sidebarCheck" style="visibility: hidden;">✓</span>
                 </div>
                 <div class="menu-item" tabindex="0" role="menuitemcheckbox" onclick="toggleSearchSidebar(); closeMenus()">
                     <span>Search Tool</span>
@@ -559,7 +559,7 @@
     </div>
     
     <div class="app-body" id="appBody">
-        <div class="sidebar" id="sidebar">
+        <div class="sidebar hidden" id="sidebar">
             <div class="chapters-header">Chapters (drag to reorder)</div>
             <div class="chapter-list" id="chapterList"></div>
         </div>
@@ -639,7 +639,7 @@
         let draggedItem = null;
         let renderScheduled = false;
         let isDirty = false;
-        let sidebarVisible = true;
+        let sidebarVisible = false;
         let largeFontEnabled = false;
         let searchSidebarVisible = false;
         let bottomBarVisible = false;
